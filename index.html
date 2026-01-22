@@ -1,1 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Admin Panel</title>
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
+    <style>
+        /* --- PREMIUM DESIGN --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; color: white; }
+        .admin-container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 20px; }
+        header { text-align: center; margin-bottom: 10px; }
+        header h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: 2px; background: linear-gradient(90deg, #00d2ff, #3a7bd5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); transition: 0.3s; }
+        .card:hover { transform: translateY(-5px); border-color: rgba(255, 255, 255, 0.3); }
+        .card-title { font-size: 0.9rem; color: #aaa; margin-bottom: 10px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
+
+        input[type="text"] { width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: #fff; outline: none; transition: 0.3s; margin-bottom: 10px; }
+        input[type="text"]:focus { border-color: #00d2ff; background: rgba(0, 0, 0, 0.5); }
+
+        .btn-action { width: 100%; padding: 12px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(45deg, #00d2ff, #3a7bd5); text-transform: uppercase; transition: 0.3s; }
+        .btn-action:hover { box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4); transform: scale(1.02); }
+        
+        /* Status Text */
+        .current-val { font-size: 0.75rem; color: #00d2ff; margin-bottom: 10px; display: block; word-break: break-all; }
+
+        /* --- TOAST NOTIFICATION STYLES --- */
+        #toast {
+            visibility: hidden; /* Hidden by default */
+            min-width: 250px;
+            margin-left: -125px; /* Center the toast */
+            background: rgba(15, 12, 41, 0.95); /* Dark background matching theme */
+            color: #fff;
+            text-align: center;
+            border-radius: 50px; /* Rounded pill shape */
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 30px;
+            font-size: 15px;
+            border: 1px solid #00d2ff; /* Blue border */
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.5); /* Glowing effect */
+            opacity: 0;
+            transition: opacity 0.5s, bottom 0.5s;
+        }
+
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 50px; /* Moves up slightly when shown */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <header><h1>ADMIN PANEL</h1></header>
+
+        <!-- Register Link -->
+        <div class="card">
+            <div class="card-title">Register Link</div>
+            <span class="current-val" id="cur_link">Loading...</span>
+            <input type="text" id="regLink" placeholder="Enter New URL">
+            <button class="btn-action" onclick="save('registerLink', 'regLink')">Update Link</button>
+        </div>
+
+        <!-- Title -->
+        <div class="card">
+            <div class="card-title">Injector Title</div>
+            <span class="current-val" id="cur_title">Loading...</span>
+            <input type="text" id="appTitle" placeholder="Enter New Title">
+            <button class="btn-action" onclick="save('title', 'appTitle')">Update Title</button>
+        </div>
+
+        <!-- Prediction -->
+        <div class="card">
+            <div class="card-title">Custom Prediction (BIG/SMALL)</div>
+            <span class="current-val" id="cur_pred">Loading...</span>
+            <input type="text" id="pred" placeholder="Enter BIG or SMALL">
+            <button class="btn-action" onclick="save('prediction', 'pred')">Set Result</button>
+        </div>
+
+        <!-- Icon URL -->
+        <div class="card">
+            <div class="card-title">Icon Change (URL)</div>
+            <span class="current-val" id="cur_icon">Loading...</span>
+            <input type="text" id="iconUrl" placeholder="Enter Image URL">
+            <button class="btn-action" onclick="save('iconUrl', 'iconUrl')">Update Icon</button>
+        </div>
+
+    </div>
+
+    <!-- The Toast Container -->
+    <div id="toast">Updated Successfully!</div>
+
+    <script>
+        // --- YOUR CUSTOM FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxB550cEpj04reVcFlpjcVvm7SLih9j_k",
+            databaseURL: "https://ind-bhai-v5-e578a-default-rtdb.firebaseio.com",
+            projectId: "ind-bhai-v5-e578a",
+            appId: "1:754857788554:android:ea319eca06fa2cb4431973"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // 1. Live Read - Database se current values dikhana
+        const settingsRef = database.ref('adminSettings/');
+        settingsRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById('cur_link').innerText = "Current: " + (data.registerLink || "Not Set");
+                document.getElementById('cur_title').innerText = "Current: " + (data.title || "Not Set");
+                document.getElementById('cur_pred').innerText = "Current: " + (data.prediction || "Random");
+                document.getElementById('cur_icon').innerText = "Current: " + (data.iconUrl || "Default");
+            }
+        });
+
+        // 2. TOAST FUNCTION (Popup message)
+        function showToast(message) {
+            const x = document.getElementById("toast");
+            x.innerText = message;
+            x.className = "show";
+            
+            // 3 second baad hide ho jayega
+            setTimeout(function(){ 
+                x.className = x.className.replace("show", ""); 
+            }, 3000);
+        }
+
+        // 3. Save Data - Alert ko hata ke Toast lagaya hai
+        function save(key, inputId) {
+            const val = document.getElementById(inputId).value;
+            if (!val && key !== 'prediction') {
+                showToast("Please enter a value!"); // Warning Toast
+                return;
+            }
+
+            database.ref('adminSettings/').update({
+                [key]: val
+            }).then(() => {
+                showToast("Updated Successfully! ✅"); // Success Toast
+                document.getElementById(inputId).value = ""; // Clear input
+            }).catch((error) => {
+                showToast("Error: " + error.message); // Error Toast
+            });
+        }
+    </script>
+
+</body>
+</html>
